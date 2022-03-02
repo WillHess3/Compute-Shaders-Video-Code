@@ -1,0 +1,97 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel Vorinoi
+#pragma kernel MoveVorinoi
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+uint width;
+uint height;
+
+struct VorinoiPoint {
+    float2 pos;
+    float angle;
+    float speed;
+};
+
+RWStructuredBuffer<VorinoiPoint> vorinoiPoints;
+
+float vorinoiScale;
+float vorinoiSpeedMultiplier;
+
+float random;
+
+float4 color1;
+float4 color2;
+
+uint Hash(uint s) {
+    s ^= 2747636419u;
+    s *= 2654435769u;
+    s ^= s >> 16;
+    s *= 2654435769u;
+    s ^= s >> 16;
+    s *= 2654435769u;
+    return s;
+}
+
+float Random(uint seed) {
+    return float(Hash(seed)) / 4294967295.0;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+    if (id.x < 0 || id.y < 0 || id.x >= width || id.y >= height) {
+        return;
+    }
+
+    float random = Random(id.y * width + id.x);
+    Result[id.xy] = float4(random, random, random, 1);
+}
+
+[numthreads(8, 8, 1)]
+void Vorinoi (uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+    if (id.x < 0 || id.y < 0 || id.x >= width || id.y >= height) {
+        return;
+    }
+
+    float shortestDist = 5000000;
+    for (int i = 0; i < vorinoiPoints.Length; i++) {
+        uint distToPoint = (id.x - vorinoiPoints[i].pos.x) * (id.x - vorinoiPoints[i].pos.x) + (id.y - vorinoiPoints[i].pos.y) * (id.y - vorinoiPoints[i].pos.y);
+        if (distToPoint < shortestDist) {
+            shortestDist = distToPoint;
+        }
+    }
+
+    shortestDist /= vorinoiScale;
+    if (shortestDist > 1) {
+        shortestDist = 1;
+    }
+
+    Result[id.xy] = lerp(color1, color2, shortestDist);
+}
+
+[numthreads(8, 1, 1)]
+void MoveVorinoi(uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+    
+    if (vorinoiPoints[id.x].pos.x < 0) {
+        vorinoiPoints[id.x].pos.x = 0;
+        vorinoiPoints[id.x].angle = 6.28 * Random(id.x * random);
+    } else if (vorinoiPoints[id.x].pos.x > width) {
+        vorinoiPoints[id.x].pos.x = width;
+        vorinoiPoints[id.x].angle = 6.28 * Random(id.x * random);
+    }
+
+    if (vorinoiPoints[id.x].pos.y < 0) {
+        vorinoiPoints[id.x].pos.y = 0;
+        vorinoiPoints[id.x].angle = 6.28 * Random(id.x * random);
+    } else if (vorinoiPoints[id.x].pos.y > height) {
+        vorinoiPoints[id.x].pos.y = height;
+        vorinoiPoints[id.x].angle = 6.28 * Random(id.x * random);
+    }
+
+    vorinoiPoints[id.x].pos += float2(cos(vorinoiPoints[id.x].angle) * vorinoiPoints[id.x].speed, sin(vorinoiPoints[id.x].angle) * vorinoiPoints[id.x].speed) * vorinoiSpeedMultiplier;
+}

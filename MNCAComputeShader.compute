@@ -1,0 +1,137 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel GenerateBaseTexture
+#pragma kernel NewRound
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> DisplayTexture;
+RWTexture2D<float4> PreviousTexture;
+
+float randomX;
+float randomY;
+
+int width;
+int height;
+
+int mouseX;
+int mouseY;
+int radius;
+
+float percentAlive;
+
+float4 aliveColor;
+float4 deadColor;
+
+float rand(float2 co) {
+    return (frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453)) * 1;
+}
+
+[numthreads(8, 8, 1)]
+void GenerateBaseTexture(uint3 id : SV_DispatchThreadID) {
+    PreviousTexture[id.xy] = lerp(deadColor, aliveColor, step(rand(float2(id.x * randomX, id.y * randomY)), percentAlive));
+    DisplayTexture[id.xy] = PreviousTexture[id.xy];
+}
+
+[numthreads(8, 8, 1)]
+void NewRound(uint3 id : SV_DispatchThreadID) {
+    PreviousTexture[id.xy] = DisplayTexture[id.xy];
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here
+    if ((id.x - mouseX) * (id.x - mouseX) + (id.y - mouseY) * (id.y - mouseY) < radius) {
+        DisplayTexture[id.xy] = deadColor;
+        return;
+    }
+
+    if (PreviousTexture[id.xy].r == aliveColor.r) {
+        bool die = false;
+        uint livingNeighbors;
+        for (int x = -5; x <= 5; x++) {
+            for (int y = -5; y <= 5; y++) {
+                if (abs(x) > 4 || abs(y) > 4) {
+                    if (x == 0 && y == 0) {
+                        continue;
+                    }
+
+                    if (PreviousTexture[float2(id.x + x, id.y + y)].r == aliveColor.r) {
+                        livingNeighbors++;
+                    }
+                }
+            }
+        }
+
+        if (15 < livingNeighbors) {
+            DisplayTexture[id.xy] = deadColor;
+            die = true;
+        } else {
+            die = false;
+        }
+
+        if (!die) {
+            livingNeighbors = 0;
+            for (int x = -3; x <= 3; x++) {
+                for (int y = -3; y <= 3; y++) {
+                    if (x == 0 && y == 0) {
+                        continue;
+                    }
+
+                    if (PreviousTexture[float2(id.x + x, id.y + y)].r == aliveColor.r) {
+                        livingNeighbors++;
+                    }
+                }
+            }
+
+            if (livingNeighbors > 15 || livingNeighbors < 8) {
+                DisplayTexture[id.xy] = deadColor;
+            } else {
+                DisplayTexture[id.xy] = aliveColor;
+            }
+        }
+    } else {
+        bool rez = false;
+        uint livingNeighbors;
+        for (int x = -5; x <= 5; x++) {
+            for (int y = -5; y <= 5; y++) {
+                if (abs(x) > 4 || abs(y) > 4) {
+                    if (x == 0 && y == 0) {
+                        continue;
+                    }
+
+                    if (PreviousTexture[float2(id.x + x, id.y + y)].r == aliveColor.r) {
+                        livingNeighbors++;
+                    }
+                }
+            }
+        }
+
+        if (2 < livingNeighbors && livingNeighbors < 15) {
+            rez = true;
+        } else {
+            DisplayTexture[id.xy] = deadColor;
+        }
+
+        if (rez) {
+            livingNeighbors = 0;
+            for (int x = -3; x <= 3; x++) {
+                for (int y = -3; y <= 3; y++) {
+                    if (x == 0 && y == 0) {
+                        continue;
+                    }
+
+                    if (PreviousTexture[float2(id.x + x, id.y + y)].r == aliveColor.r) {
+                        livingNeighbors++;
+                    }
+                }
+            }
+
+            if (8 < livingNeighbors && livingNeighbors < 15) {
+                DisplayTexture[id.xy] = aliveColor;
+            } else {
+                DisplayTexture[id.xy] = deadColor;
+            }
+        }
+    }
+}

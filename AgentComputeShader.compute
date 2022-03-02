@@ -1,0 +1,113 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel DicipateAndBlurTrails
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+
+struct agent {
+    float2 pos;
+    float rot;
+    float rotDelta;
+    float3 color;
+};
+
+RWStructuredBuffer<agent> buffer;
+
+uint numOfAgents;
+
+uint width;
+uint height;
+uint speed;
+float deltaTime;
+float2 mousePos;
+bool followCursor;
+
+float trailBlurAmt;
+float trailDuration;
+
+[numthreads(16, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID) {
+    // TODO: insert actual code here!
+    if (id.x >= numOfAgents) {
+        return;
+    }
+
+    float2 dir = float2(cos(buffer[id.x].rot), sin(buffer[id.x].rot));
+    float2 newPos = dir * deltaTime * speed;
+    buffer[id.x].pos += newPos;
+
+    //bounce walls
+    if (buffer[id.x].pos.x >= width || buffer[id.x].pos.x <= 0) {
+        buffer[id.x].rot = 3.141592653596969 - buffer[id.x].rot;
+    } else if (buffer[id.x].pos.y >= height || buffer[id.x].pos.y <= 0) {
+        buffer[id.x].rot = 2 * 3.141592653596969 - buffer[id.x].rot;
+    }
+
+    //random dir
+    //buffer[id.x].rot += buffer[id.x].rotDelta * deltaTime;
+
+    //follow/repell from cursor
+    if (followCursor) {
+        if (mousePos.x > buffer[id.x].pos.x) {
+            buffer[id.x].rot = atan((mousePos.y - buffer[id.x].pos.y) / (mousePos.x - buffer[id.x].pos.x));
+        } else {
+            buffer[id.x].rot = 3.141592653596969 + atan((mousePos.y - buffer[id.x].pos.y) / (mousePos.x - buffer[id.x].pos.x));
+        }
+    } else {
+        if (mousePos.x > buffer[id.x].pos.x) {
+            buffer[id.x].rot = 3.141592653596969 + atan((mousePos.y - buffer[id.x].pos.y) / (mousePos.x - buffer[id.x].pos.x));
+        } else {
+            buffer[id.x].rot = atan((mousePos.y - buffer[id.x].pos.y) / (mousePos.x - buffer[id.x].pos.x));
+        }
+    }
+
+
+    //through walls
+    /*if (buffer[id.x].pos.x < 0) {
+        buffer[id.x].pos.x = width;
+    }
+    else if (buffer[id.x].pos.x > width) {
+        buffer[id.x].pos.x = 0;
+    }
+
+    if (buffer[id.x].pos.y < 0) {
+        buffer[id.x].pos.y = height;
+    }
+    else if (buffer[id.x].pos.y > height) {
+        buffer[id.x].pos.y = 0;
+    }*/
+
+    Result[buffer[id.x].pos] = float4(buffer[id.x].color.r, buffer[id.x].color.g, buffer[id.x].color.b, 1);
+}
+
+[numthreads(8, 8, 1)]
+void DicipateAndBlurTrails(uint3 id : SV_DispatchThreadID) {
+    Result[id.xy] -= deltaTime * trailDuration;
+    if (id.x <= 1 || id.x >= width - 1 || id.y <= 1 || id.y >= height - 1) {
+        Result[id.xy] -= deltaTime * 10;
+        return;
+    }
+    
+    float4 ogVal = Result[id.xy];
+
+    float3 average = float3(0, 0, 0);
+    float count = 0;
+
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            average.r += Result[float2(id.x + x, id.y + y)].r;
+            average.g += Result[float2(id.x + x, id.y + y)].g;
+            average.b += Result[float2(id.x + x, id.y + y)].b;
+
+            count++;
+        }
+    }
+
+    average /= count;
+
+    float4 blurResult = lerp(ogVal, float4(average.r, average.g, average.b, 1), trailBlurAmt);
+
+    Result[id.xy] = blurResult;
+}

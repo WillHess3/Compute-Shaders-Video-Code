@@ -1,0 +1,68 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+#pragma kernel NextRound
+#pragma kernel GenerateMap
+
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> PreviousTexture;
+RWTexture2D<float4> DisplayTexture;
+
+float random;
+
+float rand(float2 co) {
+    return (frac(sin(dot(co.xy, float2(12.9898, 78.233))) * 43758.5453)) * 1;
+}
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID) {
+    if (PreviousTexture[id.xy].r == 1) {
+        if (id.y > 0) {
+            if (PreviousTexture[float2(id.x, id.y - 1)].r == 0) {
+                DisplayTexture[float2(id.x, id.y - 1)] = PreviousTexture[id.xy];
+                DisplayTexture[id.xy] = float4(0, 0, 0, 1);
+            } else {//make sand go sideways
+                bool left = false;
+                bool right = false;
+                if (PreviousTexture[float2(id.x - 1, id.y - 1)].r == 0) {
+                    left = true;
+                }
+
+                if (PreviousTexture[float2(id.x + 1, id.y - 1)].r == 0) {
+                    right == true;
+                }
+
+                if (left && !right) {
+                    DisplayTexture[id.xy] = float4(0, 0, 0, 1);
+                    DisplayTexture[float2(id.x, id.y - 1)] = PreviousTexture[id.xy];
+                } else if (right && !left) {
+                    DisplayTexture[id.xy] = float4(0, 0, 0, 1);
+                    DisplayTexture[float2(id.x, id.y + 1)] = PreviousTexture[id.xy];
+                } else if (right && left) {
+                    DisplayTexture[id.xy] = float4(0, 0, 0, 1);
+                    if (step(rand(float2(id.x * random, id.x - random * 10)), 0.5)) {
+                        DisplayTexture[float2(id.x, id.y + 1)] = PreviousTexture[id.xy];
+                    } else {
+                        DisplayTexture[float2(id.x, id.y - 1)] = PreviousTexture[id.xy];
+                    }
+                } else {
+                    DisplayTexture[id.xy] = float4(1, 1, 1, 1);
+                }
+            }
+        }
+    }
+}
+
+[numthreads(8, 8, 1)]
+void NextRound(uint3 id : SV_DispatchThreadID) {
+    PreviousTexture[id.xy] = DisplayTexture[id.xy];
+}
+
+[numthreads(8, 8, 1)]
+void GenerateMap(uint3 id : SV_DispatchThreadID) {
+    //PreviousTexture[id.xy] = lerp(float4(0, 0, 0, 1), float4(1, 1, 1, 1), step(.9, rand(float2(id.x * random, random + random * id.y))));
+    
+    PreviousTexture[id.xy] = lerp(float4(0, 0, 0, 1), float4(1, 1, 1, 1), id.x == 100);
+    DisplayTexture[id.xy] = PreviousTexture[id.xy];
+}
